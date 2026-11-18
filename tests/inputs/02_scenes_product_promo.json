@@ -1,0 +1,21 @@
+{
+  "scenes": [
+    {
+      "text": "Introducing IncuBrix: the fastest AI engine to turn any script into published video.",
+      "visual_hint": "modern creator studio with dual monitors and creative workspace"
+    },
+    {
+      "text": "Simply type your script, select your voice, and our semantic engine finds licence clean footage.",
+      "visual_hint": "software developer typing code on computer in high tech office"
+    },
+    {
+      "text": "Export in any aspect ratio ready for YouTube, TikTok, and Instagram in minutes.",
+      "visual_hint": "close up of person navigating social media feeds on smartphone"
+    }
+  ],
+  "voice": "en-US-female",
+  "aspect_ratios": ["16:9", "9:16"],
+  "style": "clean, corporate, vibrant tech aesthetic",
+  "avoid": ["alcohol", "gambling"],
+  "captions": {"burn_in": true, "srt": true}
+}

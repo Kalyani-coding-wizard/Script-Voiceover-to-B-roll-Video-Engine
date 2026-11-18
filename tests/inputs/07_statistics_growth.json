@@ -1,0 +1,8 @@
+{
+  "script": "Enterprise quarterly performance surpassed expectations as sales grew 40% in 2025. Customer retention reached 98% across all global operating territories.",
+  "voice": "en-US-male",
+  "aspect_ratios": ["16:9"],
+  "style": "clean corporate analytics",
+  "avoid": [],
+  "captions": {"burn_in": true, "srt": true}
+}

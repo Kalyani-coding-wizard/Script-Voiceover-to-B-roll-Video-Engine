@@ -1,0 +1,8 @@
+{
+  "script": "வணக்கம். எதிர்காலத்திற்கான சேமிப்பு மற்றும் புத்திசாலித்தனமான முதலீடு குறித்த முக்கியமான வழிகாட்டல் இது.",
+  "voice": "ta-IN-female",
+  "aspect_ratios": ["16:9"],
+  "style": "calm, modern business",
+  "avoid": [],
+  "captions": {"burn_in": true, "srt": true}
+}

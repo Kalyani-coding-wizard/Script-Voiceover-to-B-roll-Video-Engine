@@ -1,0 +1,8 @@
+{
+  "script": "A somber memorial was held today in the quiet morning light, honoring those lost during the recent tragedy with quiet reflection and community solidarity.",
+  "voice": "en-GB-female",
+  "aspect_ratios": ["16:9"],
+  "style": "respectful, serene, dignified nature",
+  "avoid": ["celebrations", "bright flashes", "loud imagery"],
+  "captions": {"burn_in": true, "srt": true}
+}

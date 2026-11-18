@@ -1,0 +1,24 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environments & Local Config
+.env
+venv/
+env/
+ENV/
+
+# Temporary DB & Test Artifacts
+*.db
+*.sqlite3
+test.db
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local Output Directories
+outputs/
+batch_results/
+tmp/

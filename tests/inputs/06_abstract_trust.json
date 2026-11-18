@@ -1,0 +1,8 @@
+{
+  "script": "Trust is earned slowly, built on consistent action and integrity. When promises are kept through adversity, lasting partnerships flourish across generations.",
+  "voice": "en-GB-female",
+  "aspect_ratios": ["16:9"],
+  "style": "cinematic, thoughtful business narrative",
+  "avoid": ["cheap handshakes", "cliches"],
+  "captions": {"burn_in": true, "srt": true}
+}

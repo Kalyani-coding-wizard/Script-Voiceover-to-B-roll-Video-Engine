@@ -1,0 +1,8 @@
+{
+  "script": "Three simple financial habits that change everything: track your daily spending, automate your monthly investments, and eliminate high interest debt immediately.",
+  "voice": "en-US-female",
+  "aspect_ratios": ["9:16"],
+  "style": "dynamic mobile video for TikTok and Instagram Reels",
+  "avoid": ["people's faces"],
+  "captions": {"burn_in": true, "srt": true}
+}

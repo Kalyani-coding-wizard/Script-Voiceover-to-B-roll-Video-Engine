@@ -1,0 +1,8 @@
+{
+  "script": "Building financial discipline is the cornerstone of long-term independence. When you save consistently and invest wisely, your capital compounds over time. Start early, stay focused, and watch your future flourish.",
+  "voice": "en-IN-female",
+  "aspect_ratios": ["16:9"],
+  "style": "bright, modern, real-world footage",
+  "avoid": ["people's faces", "alcohol"],
+  "captions": {"burn_in": true, "srt": true}
+}

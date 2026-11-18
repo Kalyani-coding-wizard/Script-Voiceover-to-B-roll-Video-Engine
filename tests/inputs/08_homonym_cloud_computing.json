@@ -1,0 +1,8 @@
+{
+  "script": "Modern cloud computing infrastructure powers digital banking transactions worldwide. Engineers deploy microservices on scalable server clusters with zero downtime.",
+  "voice": "en-IN-male",
+  "aspect_ratios": ["16:9"],
+  "style": "high tech enterprise infrastructure",
+  "avoid": ["clouds in sky", "weather"],
+  "captions": {"burn_in": true, "srt": true}
+}

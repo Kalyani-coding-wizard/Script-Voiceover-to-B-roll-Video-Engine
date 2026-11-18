@@ -1,0 +1,354 @@
+openapi: 3.1.0
+info:
+  title: IncuBrix Script and Voiceover to B-roll Video Engine API
+  description: >-
+    Transforms voiceovers or scripts into finished, licence-clean B-roll videos, scene by scene.
+    Provides semantic footage search, generative video fallback, smart aspect-ratio rendering,
+    and automatic caption burn-in.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+  - url: https://api.incubrix.com
+    description: Production environment
+
+paths:
+  /api/v1/broll/jobs:
+    post:
+      summary: Submit a new B-roll video generation job
+      description: >-
+        Submits audio, script, or IncuBrix scene list for B-roll generation.
+        Enforces idempotency: repeated submissions with the same Idempotency-Key
+        return the existing job without repeating work.
+      operationId: createBrollJob
+      headers:
+        Idempotency-Key:
+          required: true
+          schema:
+            type: string
+          description: Unique client key for safe request retries.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobRequest'
+      responses:
+        '202':
+          description: Job accepted and queued for processing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobAccepted'
+        '400':
+          description: Bad request (missing required headers or malformed payload).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Unprocessable entity (validation errors).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/jobs/{job_id}:
+    get:
+      summary: Retrieve status and download links for a job
+      operationId: getJobStatus
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Unique UUID of the job.
+      responses:
+        '200':
+          description: Job status and progress returned successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '404':
+          description: Job not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/jobs/{job_id}/swap-clip:
+    post:
+      summary: Swap a single scene clip and re-render only the affected part
+      description: Re-renders only the specified scene clip without repeating the entire render.
+      operationId: swapSceneClip
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SwapClipRequest'
+      responses:
+        '202':
+          description: Swap request accepted and queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobAccepted'
+        '404':
+          description: Job not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/download/{job_id}/{filename}:
+    get:
+      summary: Download output video, captions, timeline, or manifest
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File stream.
+          content:
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                type: object
+            text/plain:
+              schema:
+                type: string
+        '404':
+          description: Artifact not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /health:
+    get:
+      summary: Liveness probe
+      responses:
+        '200':
+          description: Service is healthy.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /ready:
+    get:
+      summary: Readiness probe
+      responses:
+        '200':
+          description: Database and Redis backends are connected.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  checks:
+                    type: object
+        '503':
+          description: Dependencies unavailable.
+
+components:
+  schemas:
+    Scene:
+      type: object
+      required:
+        - text
+      properties:
+        text:
+          type: string
+          description: Scene narration text.
+        visual_hint:
+          type: string
+          nullable: true
+          description: Optional visual prompt guidance.
+
+    JobRequest:
+      type: object
+      properties:
+        audio_url:
+          type: string
+          format: uri
+          nullable: true
+          description: Public URL to audio file (mp3, wav, m4a, up to 10 min).
+        script:
+          type: string
+          nullable: true
+          description: Plain text script to be synthesized via TTS.
+        scenes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Scene'
+          nullable: true
+          description: Pre-segmented IncuBrix scenes.
+        voice:
+          type: string
+          default: en-IN-female
+          description: TTS voice identifier.
+        aspect_ratios:
+          type: array
+          items:
+            type: string
+            enum: ["16:9", "9:16", "1:1"]
+          default: ["16:9"]
+        style:
+          type: string
+          default: "bright, modern, real-world footage"
+        avoid:
+          type: array
+          items:
+            type: string
+          default: []
+        captions:
+          type: object
+          properties:
+            burn_in:
+              type: boolean
+              default: true
+            srt:
+              type: boolean
+              default: true
+        callback_url:
+          type: string
+          format: uri
+          nullable: true
+        callback_secret:
+          type: string
+          nullable: true
+
+    JobAccepted:
+      type: object
+      required:
+        - job_id
+        - status
+        - message
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          example: queued
+        message:
+          type: string
+
+    JobResponse:
+      type: object
+      required:
+        - job_id
+        - status
+        - progress
+        - created_at
+        - updated_at
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [queued, running, succeeded, failed]
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        result:
+          type: object
+          nullable: true
+          properties:
+            videos:
+              type: object
+              additionalProperties:
+                type: string
+            captions_srt:
+              type: string
+            timeline_url:
+              type: string
+            manifest_url:
+              type: string
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+
+    SwapClipRequest:
+      type: object
+      required:
+        - scene_index
+      properties:
+        scene_index:
+          type: integer
+          minimum: 0
+        new_query:
+          type: string
+          nullable: true
+        new_clip_url:
+          type: string
+          nullable: true
+
+    ErrorDetail:
+      type: object
+      required:
+        - code
+        - message
+        - retryable
+      properties:
+        code:
+          type: string
+          example: INVALID_INPUT
+        message:
+          type: string
+        retryable:
+          type: boolean
+        details:
+          type: object
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
