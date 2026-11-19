@@ -4,6 +4,7 @@ Docs: https://pixabay.com/api/docs/
 """
 import logging
 import os
+from datetime import datetime, timezone
 from typing import List, Optional, Set
 
 import aiohttp
@@ -35,8 +36,11 @@ class PixabayProvider(FootageProvider):
 
     def _get_embedder(self):
         if self._embedder is None:
-            from sentence_transformers import SentenceTransformer
-            self._embedder = SentenceTransformer("all-MiniLM-L6-v2")
+            try:
+                from sentence_transformers import SentenceTransformer
+                self._embedder = SentenceTransformer("all-MiniLM-L6-v2")
+            except ImportError:
+                self._embedder = False
         return self._embedder
 
     async def is_available(self) -> bool:
@@ -83,7 +87,7 @@ class PixabayProvider(FootageProvider):
             return []
 
         embedder = self._get_embedder()
-        scene_emb = embedder.encode(scene_text, convert_to_numpy=True)
+        scene_emb = embedder.encode(scene_text, convert_to_numpy=True) if embedder else None
 
         clips: List[FootageClip] = []
         for hit in hits:
@@ -111,8 +115,12 @@ class PixabayProvider(FootageProvider):
 
             # Score
             clip_desc = f"{query} {tags}"
-            clip_emb = embedder.encode(clip_desc, convert_to_numpy=True)
-            score = _cosine_similarity(scene_emb, clip_emb)
+            if embedder:
+                clip_emb = embedder.encode(clip_desc, convert_to_numpy=True)
+                score = _cosine_similarity(scene_emb, clip_emb)
+            else:
+                scene_words = set(scene_text.lower().split())
+                score = len(scene_words & set(clip_desc.lower().split())) / max(1, len(scene_words))
 
             user = hit.get("user", "Unknown")
             clips.append(
@@ -120,6 +128,10 @@ class PixabayProvider(FootageProvider):
                     url=clip_url,
                     source="pixabay",
                     licence="Pixabay Licence",
+                    licence_url="https://pixabay.com/service/license-summary/",
+                    source_url=hit.get("pageURL", ""),
+                    author=user,
+                    retrieved_at=datetime.now(timezone.utc).isoformat(),
                     attribution=f"Video by {user} on Pixabay",
                     is_ai_generated=False,
                     relevance_score=round(score, 4),

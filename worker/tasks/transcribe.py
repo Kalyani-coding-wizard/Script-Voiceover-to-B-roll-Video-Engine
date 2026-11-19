@@ -41,20 +41,55 @@ def transcribe_audio(
     audio_path: str,
     known_script: str | None = None,
     mock_mode: bool = False,
-    model_name: str = "base",
+    model_name: str | None = None,
+    language_hint: str = "auto",
 ) -> TranscribeResult:
     """
     Transcribes the audio file and produces word-level timestamps.
     If mock_mode is True or Whisper fails to load, produces synthetic timestamps
     aligned with known_script or duration.
     """
+    model_name = model_name or os.getenv("WHISPER_MODEL", "small")
     logger.info("transcription_started", audio_path=audio_path, model=model_name)
 
     if not mock_mode:
         try:
-            import whisper
-            model = whisper.load_model(model_name)
-            res = model.transcribe(audio_path, word_timestamps=True)
+            try:
+                from faster_whisper import WhisperModel
+                model = WhisperModel(model_name, compute_type=os.getenv("WHISPER_COMPUTE_TYPE", "int8"))
+                segments_iter, info = model.transcribe(
+                    audio_path,
+                    language=None if language_hint == "auto" else language_hint,
+                    word_timestamps=True,
+                    vad_filter=True,
+                )
+                raw_segments = list(segments_iter)
+                res = {
+                    "text": " ".join(s.text for s in raw_segments),
+                    "language": info.language,
+                    "segments": [
+                        {
+                            "id": i,
+                            "start": s.start,
+                            "end": s.end,
+                            "text": s.text,
+                            "words": [
+                                {"word": w.word, "start": w.start, "end": w.end, "probability": w.probability}
+                                for w in (s.words or [])
+                            ],
+                        }
+                        for i, s in enumerate(raw_segments)
+                    ],
+                }
+            except ImportError:
+                import whisper
+                model = whisper.load_model(model_name)
+                res = model.transcribe(
+                    audio_path,
+                    word_timestamps=True,
+                    language=None if language_hint == "auto" else language_hint,
+                    condition_on_previous_text=False,
+                )
 
             text = res.get("text", "").strip()
             language = res.get("language", "en")
@@ -88,11 +123,11 @@ def transcribe_audio(
             logger.warning("whisper_transcription_fallback", error=str(exc))
 
     # Synthetic timestamp generator for mock mode / fallback
-    return _generate_synthetic_transcription(audio_path, known_script)
+    return _generate_synthetic_transcription(audio_path, known_script, language_hint)
 
 
 def _generate_synthetic_transcription(
-    audio_path: str, known_script: str | None
+    audio_path: str, known_script: str | None, language_hint: str = "auto"
 ) -> TranscribeResult:
     """Estimates words and segment timestamps when audio has known script or mock."""
     script_text = (
@@ -139,5 +174,5 @@ def _generate_synthetic_transcription(
         duration=round(total_duration, 2),
         segments=segments,
         words=words,
-        language="en",
+        language="en" if language_hint == "auto" else language_hint,
     )

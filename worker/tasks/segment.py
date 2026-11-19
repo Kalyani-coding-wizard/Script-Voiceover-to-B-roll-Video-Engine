@@ -10,13 +10,16 @@ Enforces:
 from __future__ import annotations
 
 import re
-import structlog
+import json
+import os
 from typing import Any, Dict, List, Optional
+import aiohttp
+import structlog
 
 logger = structlog.get_logger(__name__)
 
-MIN_SCENE_DURATION = 3.0
-MAX_SCENE_DURATION = 12.0
+MIN_SCENE_DURATION = 1.5
+MAX_SCENE_DURATION = 6.0
 
 # Disambiguation rules for hard case concepts
 DISAMBIGUATION_MAP = {
@@ -98,6 +101,69 @@ def segment_narration(
         return _segment_from_predefined(predefined_scenes, total_duration)
 
     return _segment_from_transcript(transcript_segments, total_duration)
+
+
+async def segment_narration_async(
+    transcript_segments: List[Dict[str, Any]],
+    total_duration: float,
+    predefined_scenes: Optional[List[Dict[str, Any]]] = None,
+    language: str = "auto",
+    style_guidance: str = "bright, modern, real-world footage",
+) -> List[SegmentedScene]:
+    """Use the configured LLM for semantic boundaries, with deterministic fallback."""
+    if predefined_scenes:
+        return segment_narration(transcript_segments, total_duration, predefined_scenes, style_guidance)
+    provider = os.getenv("LLM_PROVIDER", "gemini").lower()
+    api_key = os.getenv("OPENAI_API_KEY" if provider == "openai" else "GEMINI_API_KEY", "")
+    if not api_key:
+        return segment_narration(transcript_segments, total_duration, None, style_guidance)
+    transcript = [
+        {"start": s.get("start"), "end": s.get("end"), "text": s.get("text"), "words": s.get("words", [])}
+        for s in transcript_segments
+    ]
+    prompt = (
+        "Segment this narration into meaning-based scenes. Boundaries must use transcript timestamps, "
+        "cover the full duration, and be 1.5 to 6 seconds where possible. Return JSON only as "
+        '{"scenes":[{"start_time":0,"end_time":2,"text":"...","visual_hint":"concrete English visual"}]}. '
+        f"Input language: {language}. Style: {style_guidance}. Transcript: {json.dumps(transcript, ensure_ascii=False)}"
+    )
+    try:
+        async with aiohttp.ClientSession() as session:
+            if provider == "openai":
+                async with session.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json={"model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"), "temperature": 0.1,
+                          "response_format": {"type": "json_object"},
+                          "messages": [{"role": "user", "content": prompt}]},
+                    timeout=aiohttp.ClientTimeout(total=30),
+                ) as response:
+                    response.raise_for_status()
+                    content = (await response.json())["choices"][0]["message"]["content"]
+            else:
+                async with session.post(
+                    "https://generativelanguage.googleapis.com/v1beta/models/"
+                    f"{os.getenv('GEMINI_MODEL', 'gemini-2.0-flash')}:generateContent",
+                    params={"key": api_key},
+                    json={"contents": [{"parts": [{"text": prompt}]}],
+                          "generationConfig": {"responseMimeType": "application/json"}},
+                    timeout=aiohttp.ClientTimeout(total=30),
+                ) as response:
+                    response.raise_for_status()
+                    content = (await response.json())["candidates"][0]["content"]["parts"][0]["text"]
+        payload = json.loads(content)
+        scenes = []
+        for index, item in enumerate(payload.get("scenes", [])):
+            scenes.append(SegmentedScene(
+                index, item.get("text", ""), float(item["start_time"]), float(item["end_time"]),
+                item.get("visual_hint", ""),
+            ))
+        if scenes:
+            _normalize_timeline_coverage(scenes, total_duration)
+            return scenes
+    except Exception as exc:
+        logger.warning("llm_segmentation_fallback", provider=provider, error=str(exc))
+    return segment_narration(transcript_segments, total_duration, None, style_guidance)
 
 
 def _segment_from_predefined(

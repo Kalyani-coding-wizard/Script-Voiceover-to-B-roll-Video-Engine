@@ -139,7 +139,7 @@ class VideoRenderer:
             # Escape path for FFmpeg subtitles filter
             escaped_srt = Path(burn_captions_srt).resolve().as_posix().replace(":", r"\:")
             cmd.extend([
-                "-vf", f"subtitles={escaped_srt}:force_style='FontSize=22,FontName=Arial,Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,Outline=2,Alignment=2,MarginV=35'"
+                "-vf", f"subtitles={escaped_srt}:force_style='FontSize=22,FontName=Noto Sans,Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,Outline=2,Alignment=2,MarginV=35'"
             ])
 
         cmd.extend([
@@ -183,7 +183,7 @@ class VideoRenderer:
             return target
 
         # For mock stock or offline test mode, generate synthetic clip directly (fast & no network)
-        if clip.source == "mock_stock" or os.getenv("MOCK_MODE", "false").lower() == "true":
+        if clip.source in {"mock_stock", "title_card"} or os.getenv("MOCK_MODE", "false").lower() == "true":
             await self._generate_synthetic_scene(target, 10.0, 1920, 1080, clip.reason)
             return target
 

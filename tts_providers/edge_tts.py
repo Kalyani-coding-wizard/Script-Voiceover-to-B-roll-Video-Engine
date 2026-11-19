@@ -35,6 +35,16 @@ VOICE_MAP = {
     "ta-IN-male": "ta-IN-ValluvarNeural",
     "ta-female": "ta-IN-PallaviNeural",
     "ta-male": "ta-IN-ValluvarNeural",
+    # Telugu
+    "te-IN-female": "te-IN-ShrutiNeural",
+    "te-IN-male": "te-IN-MohanNeural",
+    "te-female": "te-IN-ShrutiNeural",
+    "te-male": "te-IN-MohanNeural",
+    # Malayalam
+    "ml-IN-female": "ml-IN-SobhanaNeural",
+    "ml-IN-male": "ml-IN-MidhunNeural",
+    "ml-female": "ml-IN-SobhanaNeural",
+    "ml-male": "ml-IN-MidhunNeural",
 }
 
 DEFAULT_VOICE = "en-US-JennyNeural"

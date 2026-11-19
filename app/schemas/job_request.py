@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, List, Optional
 
-from pydantic import AnyHttpUrl, BaseModel, Field, model_validator
+from pydantic import AnyHttpUrl, BaseModel, Field, field_validator, model_validator
 
 
 class CaptionOptions(BaseModel):
@@ -33,10 +33,14 @@ class JobRequest(BaseModel):
 
     # ── Voice (TTS only) ────────────────────────────────────────────────────
     voice: str = Field("en-IN-female", description="TTS voice identifier.")
+    language: str = Field(
+        "auto",
+        description="Input language hint (auto, en, hi, te, ta, ml, or another Whisper language code).",
+    )
 
     # ── Output options ──────────────────────────────────────────────────────
     aspect_ratios: List[str] = Field(
-        default=["16:9"],
+        default_factory=lambda: ["9:16"],
         description="Desired output aspect ratios.",
     )
     style: str = Field(
@@ -56,6 +60,22 @@ class JobRequest(BaseModel):
     callback_secret: Optional[str] = Field(
         None, description="Secret used to sign the callback payload (HMAC-SHA256)."
     )
+
+    @field_validator("aspect_ratios")
+    @classmethod
+    def _validate_aspect_ratios(cls, value: List[str]) -> List[str]:
+        allowed = {"9:16", "16:9", "1:1"}
+        if not value or any(r not in allowed for r in value):
+            raise ValueError("aspect_ratios must contain only 9:16, 16:9, or 1:1.")
+        return list(dict.fromkeys(value))
+
+    @field_validator("language")
+    @classmethod
+    def _validate_language(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if not normalized or len(normalized) > 16:
+            raise ValueError("language must be 'auto' or a valid language code.")
+        return normalized
 
     @model_validator(mode="after")
     def _exactly_one_input(self) -> "JobRequest":

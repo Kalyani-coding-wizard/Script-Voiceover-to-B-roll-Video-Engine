@@ -8,12 +8,12 @@ services:
       target: api
     image: incubrix-broll-api:latest
     container_name: broll_api
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     env_file: .env
     ports:
       - "8000:8000"
     volumes:
-      - .:/workspace
+      - artifact_cache:/workspace/outputs
     working_dir: /workspace
     depends_on:
       postgres:
@@ -40,7 +40,7 @@ services:
     command: python -m arq worker.main.WorkerSettings
     env_file: .env
     volumes:
-      - .:/workspace
+      - artifact_cache:/workspace/outputs
     working_dir: /workspace
     depends_on:
       postgres:
@@ -93,19 +93,14 @@ services:
     restart: unless-stopped
 
   minio:
-    image: minio/minio:latest
+    image: adobe/s3mock:latest
     container_name: broll_minio
-    command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    volumes:
-      - minio_data:/data
+      initialBuckets: broll-outputs
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "9090:9090"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD-SHELL", "true"]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -118,4 +113,6 @@ volumes:
   redis_data:
     driver: local
   minio_data:
+    driver: local
+  artifact_cache:
     driver: local

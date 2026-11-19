@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import hashlib
 import os
+import asyncio
+from datetime import datetime, timezone
 from typing import List, Optional, Set
 
 import aiohttp
@@ -65,12 +67,48 @@ class FalAIFootageProvider(FootageProvider):
                         if resp.status in (200, 201):
                             data = await resp.json()
                             video_url = data.get("video", {}).get("url") or data.get("url")
+                            if not video_url:
+                                response_url = data.get("response_url")
+                                status_url = data.get("status_url")
+                                if status_url or response_url:
+                                    poll_url = status_url or response_url
+                                    for _ in range(30):
+                                        await asyncio.sleep(2)
+                                        async with session.get(
+                                            poll_url,
+                                            headers=headers,
+                                            timeout=aiohttp.ClientTimeout(total=30),
+                                        ) as poll:
+                                            poll.raise_for_status()
+                                            poll_data = await poll.json()
+                                        state = str(poll_data.get("status", "")).upper()
+                                        if state in {"COMPLETED", "SUCCEEDED"}:
+                                            final_url = response_url if response_url else poll_url
+                                            if final_url != poll_url:
+                                                async with session.get(
+                                                    final_url,
+                                                    headers=headers,
+                                                    timeout=aiohttp.ClientTimeout(total=30),
+                                                ) as final:
+                                                    final.raise_for_status()
+                                                    poll_data = await final.json()
+                                            video_url = (
+                                                poll_data.get("video", {}).get("url")
+                                                or poll_data.get("url")
+                                            )
+                                            break
+                                        if state in {"FAILED", "ERROR"}:
+                                            raise RuntimeError(poll_data.get("error", "fal.ai generation failed"))
                             if video_url:
                                 return [
                                     FootageClip(
                                         url=video_url,
                                         source=self.name,
                                         licence="Commercial-AI-Generated",
+                                        licence_url="https://fal.ai/terms",
+                                        source_url=video_url,
+                                        author="fal.ai",
+                                        retrieved_at=datetime.now(timezone.utc).isoformat(),
                                         attribution="Generated via fal.ai text-to-video model",
                                         is_ai_generated=True,
                                         relevance_score=0.92,
@@ -84,27 +122,4 @@ class FalAIFootageProvider(FootageProvider):
             except Exception as exc:
                 logger.warning("fal_ai_generation_failed", error=str(exc), query=clean_query)
 
-        # Fallback simulated generative clip for offline/test environments
-        # (Licence clean, flagged as AI-generated)
-        simulated_url = (
-            "https://assets.mixkit.co/videos/preview/mixkit-futuristic-digital-network-connections-4298-large.mp4"
-        )
-        return [
-            FootageClip(
-                url=simulated_url,
-                source=self.name,
-                licence="Commercial-AI-Generated",
-                attribution="Generated via fal.ai Fast SVD (Simulated / Commercial)",
-                is_ai_generated=True,
-                relevance_score=0.90,
-                reason=(
-                    f"Selected generative video model: Scene is abstract/conceptual ('{clean_query}'). "
-                    "Stock footage relevance was below threshold (<0.65), triggering AI video synthesis."
-                ),
-                clip_id=clip_id,
-                duration_seconds=6.0,
-                width=1920,
-                height=1080,
-                extra={"prompt": clean_query},
-            )
-        ]
+        return []

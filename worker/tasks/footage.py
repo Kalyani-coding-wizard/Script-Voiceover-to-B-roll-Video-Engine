@@ -21,6 +21,8 @@ from footage_providers.mock import MockFootageProvider
 from footage_providers.pexels import PexelsProvider
 from footage_providers.pixabay import PixabayProvider
 from worker.tasks.segment import SegmentedScene
+from worker.tasks.cards import make_title_card_clip
+from worker.tasks.safety import gate_query
 
 logger = structlog.get_logger(__name__)
 
@@ -47,6 +49,7 @@ class FootageManager:
     def __init__(self, mock_mode: bool = False):
         self.mock_mode = mock_mode
         self.used_clip_ids: Set[str] = set()
+        self.warnings: List[str] = []
 
         # Initialize providers
         self.mock_provider = MockFootageProvider()
@@ -80,6 +83,12 @@ class FootageManager:
         """
         avoid = avoid or []
         avoid_clean = list(avoid)
+        safety = gate_query(scene.text, scene.search_query)
+        if safety.requires_fallback:
+            self.warnings.append(safety.warning or "Scene routed to a safe fallback.")
+            clip = make_title_card_clip(scene.text, safety.query, safety.warning or "Safe fallback selected.")
+            self.used_clip_ids.add(clip.clip_id)
+            return clip
 
         # Content Safety: ensure named persons/brands don't produce unauthorized realistic faces
         avoid_clean.extend(["celebrity face", "trademark logo", "violent content"])
@@ -143,6 +152,14 @@ class FootageManager:
                     f"score was below threshold (<0.65). Generative video synthesized for: '{scene.search_query}'."
                 )
                 return clip
+            fallback = make_title_card_clip(
+                scene.text,
+                scene.search_query,
+                "Stock relevance was below threshold and AI footage was unavailable.",
+            )
+            self.used_clip_ids.add(fallback.clip_id)
+            self.warnings.append("Stock relevance below threshold; title-card fallback used.")
+            return fallback
 
         return clip
 
@@ -205,7 +222,17 @@ class FootageManager:
             except Exception as exc:
                 logger.warning("pixabay_search_failed_fallback_to_mock", error=str(exc))
 
-        # Provider 3: Mock Provider (Always available, licence-clean CC0)
+        if not self.mock_mode:
+            fallback = make_title_card_clip(
+                scene_text,
+                query,
+                "No licence-clean provider returned a usable clip; original title card generated.",
+            )
+            self.used_clip_ids.add(fallback.clip_id)
+            self.warnings.append("All footage providers unavailable; original title-card fallback used.")
+            return fallback
+
+        # Provider 3: deterministic mock provider (always available offline)
         mock_clips = await self.mock_provider.search(
             query=query,
             scene_text=scene_text,

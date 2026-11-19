@@ -2,6 +2,8 @@
 
 A containerised FastAPI service that converts a voiceover audio file, plain-text script, or structured scene list into polished B-roll videos with captions — in multiple aspect ratios (16:9, 9:16, 1:1) — in a single API call. It transcribes audio with Whisper, segments the transcript into scenes using an LLM, fetches royalty-free stock footage from Pexels/Pixabay (falling back to AI-generated video via fal.ai), and renders the final MP4 with burned-in captions using FFmpeg.
 
+The creator-first defaults are **9:16 output**, captions enabled, and `language=auto`. Telugu, Tamil, Malayalam, Hindi, and code-mixed inputs are retained in scene text while search queries are normalized to concrete English visuals. Every timeline clip carries its provider licence, licence URL, source URL, author, and retrieval timestamp. Movie, anime, celebrity, gaming-IP, and unsafe requests are routed to an original FFmpeg title-card fallback rather than scraped footage.
+
 ---
 
 ## Architecture
@@ -58,6 +60,21 @@ make batch input=./tests/inputs output=./results
 
 Submits every file in `input/` as a separate job, polls until all jobs finish, then downloads all outputs into `output/`. Useful for benchmarking the 8 hard cases at once.
 
+## Integration Standard tracker
+
+| Point | Proof |
+|---|---|
+| 1. Accept text/scenes | `tests/integration/test_jobs_api.py` |
+| 2. Accept audio URL | `worker/tasks/input_validation.py` and E2E pipeline |
+| 3. Async 202 + polling | `tests/e2e/test_full_pipeline.py` |
+| 4. Semantic, timed scenes | `tests/unit/test_segmenter.py` |
+| 5. Licence metadata per clip | `tests/unit/test_manifest.py` |
+| 6. Captions/SRT output | `tests/unit/test_caption.py` |
+| 7. Downloadable artifacts | `tests/e2e/test_full_pipeline.py` |
+| 8. Provider failover/fallback | `worker/tasks/footage.py` and title-card fallback |
+| 9. Idempotency and conflict handling | `tests/unit/test_idempotency.py` |
+| 10. Batchable creator corpus | `tests/fixtures/creator_scripts/` and `make corpus` |
+
 ---
 
 ## Environment Variables
@@ -67,6 +84,7 @@ Submits every file in `input/` as a separate job, polls until all jobs finish, t
 | `DATABASE_URL` | `postgresql+asyncpg://broll:broll@postgres:5432/broll` | ✅ | Async PostgreSQL DSN for job state |
 | `REDIS_URL` | `redis://redis:6379/0` | ✅ | ARQ job queue and idempotency cache |
 | `S3_ENDPOINT` | `http://minio:9000` | ✅ | MinIO / S3 endpoint for output storage |
+| `ARTIFACT_BACKEND` | `auto` | — | `auto`, `local`, or `s3`; S3 failures fall back to local artifacts |
 | `S3_ACCESS_KEY` | `minioadmin` | ✅ | S3 access key |
 | `S3_SECRET_KEY` | `minioadmin` | ✅ | S3 secret key |
 | `S3_BUCKET` | `broll-outputs` | ✅ | Bucket name for rendered video outputs |
@@ -77,6 +95,8 @@ Submits every file in `input/` as a separate job, polls until all jobs finish, t
 | `GEMINI_API_KEY` | _(empty)_ | ⚠️ | Gemini Flash key when `LLM_PROVIDER=gemini` |
 | `LLM_PROVIDER` | `gemini` | ✅ | Scene segmentation LLM: `gemini` or `openai` |
 | `FOOTAGE_PROVIDER` | `pexels` | ✅ | Primary footage source: `pexels` or `pixabay` |
+| `WHISPER_MODEL` | `small` | — | faster-whisper model; use `large-v3-turbo` for higher Indic quality |
+| `WHISPER_COMPUTE_TYPE` | `int8` | — | CPU-friendly faster-whisper compute type |
 | `TTS_PROVIDER` | `edge` | ✅ | Text-to-speech engine: `edge` (Edge TTS) |
 | `MOCK_MODE` | `false` | — | `true` → skip all external APIs, return mock clips |
 | `LOG_LEVEL` | `INFO` | — | Structured log verbosity: `DEBUG`, `INFO`, `WARNING` |
@@ -212,7 +232,7 @@ The engine explicitly handles the following edge cases from the IncuBrix brief:
 ## Notes
 
 ### Cold-Start Time
-The first request after `docker compose up` may take **30–90 seconds** while Whisper downloads its model weights (~145 MB for `base.en`). Subsequent requests are fast (model cached in memory). To pre-warm, set `WHISPER_MODEL=base.en` and hit `/ready` before sending real jobs.
+The first request after `docker compose up` may take longer while faster-whisper downloads the configured model. Subsequent requests reuse the cached model. For higher Indic quality, set `WHISPER_MODEL=large-v3-turbo` and provide a GPU-enabled deployment.
 
 ### Rate Limits
 | Service | Free Tier Limit | Engine Behaviour |

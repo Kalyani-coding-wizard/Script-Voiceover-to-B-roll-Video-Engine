@@ -65,6 +65,6 @@ def test_manifest_and_timeline():
         # Check manifest requirements
         assert manifest["job_id"] == "test-job-uuid"
         assert "production_numbers" in manifest
-        assert "turnaround_cold_seconds" in manifest["production_numbers"]
+        assert manifest["production_numbers"]["turnaround_seconds"] == 1.5
         assert "licence_and_rights" in manifest
         assert manifest["licence_and_rights"]["commercial_use_allowed"] is True

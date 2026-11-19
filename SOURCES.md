@@ -2,13 +2,18 @@
 
 All models, libraries, APIs, and media sources utilized in the default execution path are licensed for commercial use.
 
+Licence links verified 2026-11-18: Pexels License
+(`https://www.pexels.com/license/`) and Pixabay Content License
+(`https://pixabay.com/service/license-summary/`). These are provider licences,
+not CC0; each clip stores the applicable licence name and URL.
+
 ---
 
 ## 1. Machine Learning Models & Speech Synthesis
 
 | Asset | Source / Provider | License | Commercial Usability | Purpose |
 |---|---|---|---|---|
-| **Whisper (base)** | OpenAI (`openai-whisper`) | MIT License | Permitted | Local audio transcription and word-level timestamp generation |
+| **faster-whisper (small by default)** | SYSTRAN / CTranslate2 | MIT License | Permitted | Local audio transcription and word-level timestamp generation |
 | **Edge TTS (Neural)** | Microsoft (`edge-tts`) | MIT License / Public Neural API | Permitted | Neural voiceover generation across English, Hindi, and Tamil |
 | **all-MiniLM-L6-v2** | Hugging Face (`sentence-transformers`) | Apache 2.0 | Permitted | Semantic embedding generation and cosine similarity calculation |
 | **Fast SVD / Stable Video** | fal.ai | Commercial API License | Permitted | Generative AI video fallback for abstract conceptual scenes |
@@ -21,7 +26,7 @@ All models, libraries, APIs, and media sources utilized in the default execution
 |---|---|---|---|---|
 | **Pexels Video API** | Pexels GmbH | Pexels License (Commercial Use Allowed, No Attribution Required) | Permitted | Primary HD stock B-roll footage |
 | **Pixabay Video API** | Pixabay GmbH / Canva | Pixabay Content License (Commercial Safe) | Permitted | Secondary stock B-roll footage failover |
-| **Mixkit Curated Library** | Envato Elements Pty Ltd | Mixkit Stock Video Free License (Commercial) | Permitted | Mock and fallback clean video clips |
+| **Mock/title-card fallback** | IncuBrix renderer | Original output / FFmpeg legal terms | Permitted | Last-resort visuals with no external media dependency |
 
 ---
 

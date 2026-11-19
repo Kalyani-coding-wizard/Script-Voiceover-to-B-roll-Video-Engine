@@ -46,6 +46,7 @@ def build_timeline_json(
         entry = {
             "scene_index": scene.scene_index,
             "text": scene.text,
+            "search_query": scene.search_query,
             "start_time": scene.start_time,
             "end_time": scene.end_time,
             "duration": scene.duration,
@@ -54,6 +55,11 @@ def build_timeline_json(
                 "clip_id": clip.clip_id,
                 "source": clip.source,
                 "licence": clip.licence,
+                "licence_name": clip.licence,
+                "licence_url": clip.licence_url,
+                "source_url": clip.source_url or clip.url,
+                "author": clip.author,
+                "retrieved_at": clip.retrieved_at,
                 "attribution": clip.attribution,
                 "is_ai_generated": clip.is_ai_generated,
                 "reason": clip.reason,
@@ -96,7 +102,8 @@ def build_manifest_json(
     # Cost calculation:
     # TTS: ~$0.0000 (Edge TTS is free)
     # Whisper: Local compute
-    # Pexels/Pixabay: Free CC0/commercial tier
+    # Pexels/Pixabay have provider-specific commercial licences; records are
+    # retained per clip in timeline.json.
     # fal.ai: ~$0.005 per generation if triggered
     # Compute: ~$0.004 per minute on modern cloud vCPU
     estimated_cost_usd = round(0.004 * (total_duration / 60.0) + (0.005 * ai_clip_count), 4)
@@ -108,12 +115,13 @@ def build_manifest_json(
 
     manifest = {
         "job_id": job_id,
+        "language": settings_payload.get("language", "auto"),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "video_duration_seconds": total_duration,
         "models": {
-            "transcription": "openai-whisper-base",
+            "transcription": settings_payload.get("whisper_model", "faster-whisper-small"),
             "scene_segmentation": "semantic-boundary-llm-v1",
-            "tts": "microsoft-edge-tts-neural",
+            "tts": settings_payload.get("tts_provider", "microsoft-edge-tts-neural"),
             "semantic_embedder": "all-MiniLM-L6-v2",
             "independent_vlm_scorer": "siglip-vlm-eval-v1",
             "generative_video_fallback": "fal-ai-fast-svd",
@@ -126,7 +134,8 @@ def build_manifest_json(
             "storage": "s3-minio-compatible",
         },
         "settings": {
-            "aspect_ratios": settings_payload.get("aspect_ratios", ["16:9"]),
+            "aspect_ratios": settings_payload.get("aspect_ratios", ["9:16"]),
+            "language": settings_payload.get("language", "auto"),
             "style": settings_payload.get("style", "bright, modern, real-world footage"),
             "avoid": settings_payload.get("avoid", []),
             "seed": 42,
@@ -136,12 +145,10 @@ def build_manifest_json(
         },
         "timings_ms": timings_ms,
         "production_numbers": {
-            "turnaround_cold_seconds": 18.5,
-            "turnaround_warm_seconds": 9.2,
-            "cost_per_minute_usd": "$0.008",
-            "concurrent_jobs_per_server": 6,
+            "turnaround_seconds": round(timings_ms.get("total_ms", 0) / 1000, 3),
+            "cost_basis": "estimated_compute_plus_configured_generative_calls",
             "relevance_mean_score": avg_relevance,
-            "high_relevance_percent": "91.5% (scenes rated >= 4.0/5.0)",
+            "high_relevance_percent": None,
         },
         "cost_estimate": {
             "footage_api_calls": len(scenes),
@@ -155,6 +162,10 @@ def build_manifest_json(
             "licences": licences_used,
             "attributions": [c.attribution for c in clips],
             "ai_generated_clips_flagged": ai_clip_count > 0,
+            "clip_records_complete": all(
+                bool(c.licence and c.licence_url and (c.source_url or c.url) and c.attribution)
+                for c in clips
+            ),
         },
         "warnings": warnings,
     }

@@ -18,7 +18,7 @@ def format_srt_timestamp(seconds: float) -> str:
 def generate_srt(
     words_or_segments: List[Dict[str, Any]],
     output_path: str,
-    max_words_per_cue: int = 8,
+    max_words_per_cue: int = 5,
 ) -> str:
     """
     Constructs well-formed captions.srt with natural line breaks

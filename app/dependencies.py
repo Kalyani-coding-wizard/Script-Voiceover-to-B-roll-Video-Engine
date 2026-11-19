@@ -11,9 +11,9 @@ from app.config import Settings, get_settings
 
 _settings: Settings = get_settings()
 
-# Default to SQLite if asyncpg is missing or MOCK_MODE is enabled
+# Use the configured database in mock mode too; tests explicitly provide SQLite.
 _db_url = _settings.database_url
-if _settings.mock_mode or "sqlite" in _db_url:
+if "sqlite" in _db_url:
     _db_url = "sqlite+aiosqlite:///./test.db"
 else:
     try:

@@ -33,15 +33,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.dependencies import AsyncSessionLocal
+from app.storage import ArtifactStorage
 from app.models.job import Job
 from tts_providers.edge_tts import EdgeTTSProvider
 from tts_providers.mock import MockTTSProvider
+from tts_providers.openai_tts import OpenAITTSProvider
 from worker.tasks.caption import generate_srt
 from worker.tasks.footage import FootageManager
 from worker.tasks.manifest import build_manifest_json, build_timeline_json
 from worker.tasks.render import VideoRenderer
-from worker.tasks.segment import segment_narration
+from worker.tasks.segment import segment_narration_async
 from worker.tasks.transcribe import transcribe_audio
+from worker.tasks.langid import detect_language
+from worker.tasks.queries import enrich_scene_query
+from worker.tasks.media_validation import validate_outputs
+from worker.tasks.input_validation import validate_audio_url
 
 logger = structlog.get_logger(__name__)
 
@@ -96,6 +102,7 @@ async def run_pipeline(ctx: Any, job_id_str: str) -> None:
 async def run_pipeline_direct(job_id_str: str) -> None:
     """Core pipeline execution."""
     settings = get_settings()
+    artifact_storage = ArtifactStorage(settings)
     t_start = time.time()
     timings_ms: Dict[str, int] = {}
     warnings: List[str] = []
@@ -126,6 +133,7 @@ async def run_pipeline_direct(job_id_str: str) -> None:
         if req.get("audio_url"):
             # Download audio file
             url = req["audio_url"]
+            validate_audio_url(url)
             try:
                 headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
                 async with aiohttp.ClientSession(headers=headers) as session:
@@ -149,7 +157,12 @@ async def run_pipeline_direct(job_id_str: str) -> None:
             known_script = script_text or "IncuBrix Video"
 
             voice = req.get("voice", "en-IN-female")
-            tts = MockTTSProvider() if settings.mock_mode else EdgeTTSProvider()
+            if settings.mock_mode:
+                tts = MockTTSProvider()
+            elif settings.tts_provider == "openai":
+                tts = OpenAITTSProvider(settings.openai_api_key)
+            else:
+                tts = EdgeTTSProvider()
             await tts.synthesize(known_script, voice, audio_path)
             logger.info("tts_synthesized", voice=voice, path=audio_path)
 
@@ -162,6 +175,7 @@ async def run_pipeline_direct(job_id_str: str) -> None:
             audio_path=audio_path,
             known_script=known_script,
             mock_mode=settings.mock_mode,
+            language_hint=req.get("language", "auto"),
         )
         timings_ms["transcription_ms"] = int((time.time() - t0) * 1000)
         await update_job_progress(job_id_str, "running", 40)
@@ -169,12 +183,20 @@ async def run_pipeline_direct(job_id_str: str) -> None:
         # Step 4: Semantic Scene Segmentation (50%)
         t0 = time.time()
         predefined = req.get("scenes")
-        scenes = segment_narration(
+        scenes = await segment_narration_async(
             transcript_segments=trans_res.segments,
             total_duration=trans_res.duration,
             predefined_scenes=predefined,
+            language=req.get("language", "auto"),
             style_guidance=req.get("style", ""),
         )
+        language = detect_language(
+            trans_res.text,
+            req.get("language", "auto"),
+            trans_res.language,
+        )
+        for scene in scenes:
+            enrich_scene_query(scene, language)
         timings_ms["segmentation_ms"] = int((time.time() - t0) * 1000)
         await update_job_progress(job_id_str, "running", 55)
 
@@ -193,6 +215,7 @@ async def run_pipeline_direct(job_id_str: str) -> None:
                 orientation=orientation,
             )
             selected_clips.append(clip)
+        warnings.extend(footage_mgr.warnings)
 
         timings_ms["footage_selection_ms"] = int((time.time() - t0) * 1000)
         await update_job_progress(job_id_str, "running", 75)
@@ -205,7 +228,7 @@ async def run_pipeline_direct(job_id_str: str) -> None:
         # Step 7: Render Video per Aspect Ratio (92%)
         t0 = time.time()
         renderer = VideoRenderer(str(work_dir / "render"))
-        aspect_ratios = req.get("aspect_ratios", ["16:9"])
+        aspect_ratios = req.get("aspect_ratios", ["9:16"])
         video_results: Dict[str, str] = {}
 
         for ratio in aspect_ratios:
@@ -229,6 +252,11 @@ async def run_pipeline_direct(job_id_str: str) -> None:
             )
             video_results[ratio] = f"/api/v1/download/{job_id_str}/{out_filename}"
 
+        validation = await validate_outputs(
+            [str(storage_dir / f"video_{ratio.replace(':', 'x')}.mp4") for ratio in aspect_ratios]
+        )
+        if not validation.get("validated"):
+            warnings.append(validation.get("reason", "Media validation was skipped."))
         timings_ms["rendering_ms"] = int((time.time() - t0) * 1000)
         await update_job_progress(job_id_str, "running", 94)
 
@@ -239,15 +267,30 @@ async def run_pipeline_direct(job_id_str: str) -> None:
         build_timeline_json(scenes, selected_clips, timeline_path)
         timings_ms["total_ms"] = int((time.time() - t_start) * 1000)
 
+        manifest_payload = dict(req)
+        manifest_payload["language"] = language
+        manifest_payload["tts_provider"] = "mock" if settings.mock_mode else settings.tts_provider
+        manifest_payload["whisper_model"] = f"faster-whisper-{settings.whisper_model}"
         build_manifest_json(
             job_id=job_id_str,
             scenes=scenes,
             clips=selected_clips,
-            settings_payload=req,
+            settings_payload=manifest_payload,
             timings_ms=timings_ms,
             output_path=manifest_path,
             warnings=warnings,
         )
+
+        # Persist all final artifacts through MinIO/S3, while retaining the
+        # local outputs mirror for mock/offline deployments.
+        final_artifacts = [
+            timeline_path,
+            manifest_path,
+            srt_file,
+            *[str(storage_dir / f"video_{ratio.replace(':', 'x')}.mp4") for ratio in aspect_ratios],
+        ]
+        for artifact_path in final_artifacts:
+            await asyncio.to_thread(artifact_storage.upload_file, job_id_str, artifact_path)
 
         # Step 9: Assemble final output URLs and complete job (100%)
         result_payload = {
@@ -322,6 +365,12 @@ async def run_swap_clip_direct(
 
     with open(timeline_file, "w") as f:
         json.dump(timeline, f, indent=2)
+
+    await asyncio.to_thread(
+        ArtifactStorage().upload_file,
+        job_id_str,
+        timeline_file,
+    )
 
     await update_job_progress(job_id_str, "succeeded", 100)
     logger.info("swap_clip_completed", job_id=job_id_str, scene_index=scene_index)

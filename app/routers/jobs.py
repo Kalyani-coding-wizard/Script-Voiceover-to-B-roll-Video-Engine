@@ -3,7 +3,9 @@ Jobs router: POST /api/v1/broll/jobs and POST /api/v1/jobs/{job_id}/swap-clip.
 """
 from __future__ import annotations
 
+import json
 import uuid
+import hashlib
 from typing import Any, Dict, Optional
 
 import structlog
@@ -71,6 +73,24 @@ async def create_broll_job(
     existing_job = result.scalar_one_or_none()
 
     if existing_job is not None:
+        incoming_hash = hashlib.sha256(
+            json.dumps(request_data.model_dump(), sort_keys=True, default=str).encode()
+        ).hexdigest()
+        existing_hash = hashlib.sha256(
+            json.dumps(existing_job.request_payload, sort_keys=True, default=str).encode()
+        ).hexdigest()
+        if incoming_hash != existing_hash:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "error": {
+                        "code": "IDEMPOTENCY_CONFLICT",
+                        "message": "Idempotency-Key was already used with a different payload.",
+                        "retryable": False,
+                        "details": {"idempotency_key": clean_key},
+                    }
+                },
+            )
         logger.info(
             "idempotent_request_matched",
             idempotency_key=clean_key,
@@ -201,9 +221,13 @@ async def download_output_file(job_id: uuid.UUID, filename: str):
 
     # Safe sanitization
     clean_name = Path(filename).name
+    from app.storage import ArtifactStorage
     file_path = Path("outputs") / str(job_id) / clean_name
 
-    if not file_path.exists():
+    storage = ArtifactStorage()
+    try:
+        storage.download_file(str(job_id), clean_name, file_path)
+    except (FileNotFoundError, OSError):
         raise HTTPException(
             status_code=404,
             detail={

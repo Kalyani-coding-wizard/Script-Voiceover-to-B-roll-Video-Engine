@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     s3_access_key: str = "minioadmin"
     s3_secret_key: str = "minioadmin"
     s3_bucket: str = "broll-outputs"
+    storage_mode: Literal["local", "s3"] = "local"
+    s3_region: str = "us-east-1"
+    artifact_backend: Literal["auto", "local", "s3"] = "auto"
 
     # ── External API keys ───────────────────────────────────────────────────
     pexels_api_key: str = ""
@@ -61,6 +64,8 @@ class Settings(BaseSettings):
     # ── Business limits ─────────────────────────────────────────────────────
     max_audio_duration: int = 600  # seconds
     worker_concurrency: int = 2
+    whisper_model: str = "small"
+    whisper_compute_type: str = "int8"
 
     # ── Security ────────────────────────────────────────────────────────────
     hmac_secret: str = "change-me-in-production"

@@ -8,11 +8,15 @@ from typing import List, Optional, Set
 class FootageClip:
     url: str
     source: str                     # 'pexels', 'pixabay', 'fal_ai', 'mock'
-    licence: str                    # e.g. 'Pexels Licence', 'Pixabay Licence', 'CC0'
+    licence: str                    # provider or renderer licence name
     attribution: str                # human-readable credit
     is_ai_generated: bool
     relevance_score: float          # 0.0–1.0 cosine similarity
     reason: str                     # why this clip matches the scene
+    licence_url: str = ""
+    source_url: str = ""
+    author: str = ""
+    retrieved_at: Optional[str] = None
     clip_id: str = ""               # provider-specific ID for dedup
     duration_seconds: float = 0.0
     width: int = 1920

@@ -224,12 +224,16 @@ components:
           type: string
           default: en-IN-female
           description: TTS voice identifier.
+        language:
+          type: string
+          default: auto
+          description: Input language hint; detected language is recorded in manifest.json.
         aspect_ratios:
           type: array
           items:
             type: string
             enum: ["16:9", "9:16", "1:1"]
-          default: ["16:9"]
+          default: ["9:16"]
         style:
           type: string
           default: "bright, modern, real-world footage"

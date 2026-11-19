@@ -38,7 +38,7 @@ def test_requires_exactly_one_input():
 def test_default_values():
     req = JobRequest(script="Hello world")
     assert req.voice == "en-IN-female"
-    assert req.aspect_ratios == ["16:9"]
+    assert req.aspect_ratios == ["9:16"]
     assert req.captions.burn_in is True
     assert req.captions.srt is True
     assert req.avoid == []

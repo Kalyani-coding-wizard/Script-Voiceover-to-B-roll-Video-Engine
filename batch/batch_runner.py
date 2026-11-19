@@ -10,12 +10,48 @@ import asyncio
 import json
 import os
 import sys
+import statistics
+import subprocess
 import time
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List
 
 import httpx
+
+
+def _probe_media(path: Path) -> Dict[str, Any]:
+    try:
+        proc = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-show_entries", "stream=codec_name,width,height,r_frame_rate,codec_type",
+                "-of", "json", str(path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=True,
+        )
+        streams = json.loads(proc.stdout).get("streams", [])
+        video = next((s for s in streams if s.get("codec_type") == "video"), {})
+        audio = next((s for s in streams if s.get("codec_type") == "audio"), {})
+        return {
+            "video_codec": video.get("codec_name"),
+            "audio_codec": audio.get("codec_name"),
+            "width": video.get("width"),
+            "height": video.get("height"),
+            "frame_rate": video.get("r_frame_rate"),
+            "valid_9x16": (
+                video.get("width") == 1080
+                and video.get("height") == 1920
+                and video.get("r_frame_rate") == "30/1"
+                and video.get("codec_name") == "h264"
+                and audio.get("codec_name") == "aac"
+            ),
+        }
+    except Exception as exc:
+        return {"probe_error": str(exc), "valid_9x16": False}
 
 
 async def run_single_job(
@@ -133,6 +169,22 @@ async def run_single_job(
         except Exception as exc:
             print(f"    Warning: failed to download {fname}: {exc}")
 
+    media_reports = {
+        fname: _probe_media(job_output_dir / fname)
+        for fname in downloaded_files
+        if fname.startswith("video_")
+    }
+
+    manifest_complete = False
+    if "manifest.json" in downloaded_files:
+        try:
+            manifest = json.loads((job_output_dir / "manifest.json").read_text())
+            manifest_complete = bool(
+                manifest.get("licence_and_rights", {}).get("clip_records_complete")
+            )
+        except Exception:
+            manifest_complete = False
+
     print(f"[✓] Completed {input_file.name} in {elapsed}s (saved {len(downloaded_files)} files to {job_output_dir.name})")
 
     return {
@@ -141,8 +193,18 @@ async def run_single_job(
         "status": "succeeded",
         "duration_seconds": elapsed,
         "artifacts_downloaded": downloaded_files,
+        "media_reports": media_reports,
+        "manifest_complete": manifest_complete,
         "output_directory": str(job_output_dir),
     }
+
+
+def _percentile(values: List[float], percentile: float) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    index = max(0, min(len(ordered) - 1, round((len(ordered) - 1) * percentile)))
+    return round(ordered[index], 2)
 
 
 async def main_async(args: argparse.Namespace) -> int:
@@ -184,11 +246,32 @@ async def main_async(args: argparse.Namespace) -> int:
 
     # Save summary report
     summary_path = output_path / "summary.json"
+    durations = [
+        float(r["duration_seconds"])
+        for r in results
+        if r.get("status") == "succeeded" and isinstance(r.get("duration_seconds"), (int, float))
+    ]
+    media_reports = [
+        report
+        for r in results
+        for report in (r.get("media_reports") or {}).values()
+    ]
     summary_report = {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "total_inputs": len(input_files),
         "succeeded": sum(1 for r in results if r.get("status") == "succeeded"),
         "failed": sum(1 for r in results if r.get("status") != "succeeded"),
+        "benchmark": {
+            "average_duration_seconds": round(statistics.fmean(durations), 2) if durations else 0.0,
+            "p50_duration_seconds": _percentile(durations, 0.50),
+            "p95_duration_seconds": _percentile(durations, 0.95),
+            "all_9x16_outputs_valid": bool(media_reports) and all(
+                report.get("valid_9x16") for report in media_reports
+            ),
+            "all_manifests_complete": all(
+                r.get("manifest_complete") for r in results if r.get("status") == "succeeded"
+            ),
+        },
         "results": results,
     }
 

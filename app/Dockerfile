@@ -3,6 +3,12 @@
 # =============================================================================
 FROM python:3.11-slim AS base
 
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    HF_HOME=/workspace/.cache/huggingface \
+    TORCH_HOME=/workspace/.cache/torch
+
 # System deps: FFmpeg, git, build tools (needed for openai-whisper / torch)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg \
@@ -10,9 +16,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         build-essential \
         libpq-dev \
+        fonts-noto-core \
+        fonts-noto-extra \
         && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
+
+RUN mkdir -p /workspace/.cache/huggingface /workspace/.cache/torch
 
 # Install Python dependencies first (layer-cached unless requirements change)
 COPY requirements.txt .
