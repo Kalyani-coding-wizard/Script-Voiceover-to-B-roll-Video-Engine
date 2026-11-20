@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     # ── Provider selection ──────────────────────────────────────────────────
     tts_provider: Literal["edge", "openai"] = "edge"
     llm_provider: Literal["gemini", "openai"] = "gemini"
-    footage_provider: Literal["pexels", "pixabay"] = "pexels"
+    footage_provider: Literal["pexels", "pixabay", "fal"] = "fal"
 
     # ── Feature flags ───────────────────────────────────────────────────────
     mock_mode: bool = False

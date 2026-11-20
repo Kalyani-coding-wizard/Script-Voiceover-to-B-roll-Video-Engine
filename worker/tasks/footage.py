@@ -46,8 +46,9 @@ SENSITIVE_KEYWORDS = {
 class FootageManager:
     """Manages multi-provider footage retrieval, fallback hierarchy, and deduplication."""
 
-    def __init__(self, mock_mode: bool = False):
+    def __init__(self, mock_mode: bool = False, footage_provider: str = "pexels"):
         self.mock_mode = mock_mode
+        self.footage_provider = footage_provider
         self.used_clip_ids: Set[str] = set()
         self.warnings: List[str] = []
 
@@ -172,6 +173,47 @@ class FootageManager:
         override_reason: Optional[str] = None,
     ) -> FootageClip:
         """Searches across providers with automatic failover."""
+        if not self.mock_mode and self.footage_provider == "fal":
+            if await self.fal_ai.is_available():
+                try:
+                    clips = await self.fal_ai.search(
+                        query=query,
+                        scene_text=scene_text,
+                        orientation=orientation,
+                        avoid=avoid,
+                        used_ids=self.used_clip_ids,
+                    )
+                    if clips:
+                        best = clips[0]
+                        self.used_clip_ids.add(best.clip_id)
+                        best.reason = override_reason or (
+                            f"Selected Generative AI (fal.ai) per configured default: '{query}'."
+                        )
+                        return best
+                except Exception as exc:
+                    logger.warning("fal_ai_search_failed_fallback_to_stock", error=str(exc))
+
+        if not self.mock_mode and self.footage_provider == "pixabay":
+            if await self.pixabay.is_available():
+                try:
+                    clips = await self.pixabay.search(
+                        query=query,
+                        scene_text=scene_text,
+                        orientation=orientation,
+                        avoid=avoid,
+                        used_ids=self.used_clip_ids,
+                        per_page=5,
+                    )
+                    if clips:
+                        best = clips[0]
+                        self.used_clip_ids.add(best.clip_id)
+                        best.reason = override_reason or (
+                            f"Selected Stock (Pixabay) per configured default: '{query}'."
+                        )
+                        return best
+                except Exception as exc:
+                    logger.warning("pixabay_search_failed_fallback_to_pexels", error=str(exc))
+
         # Provider 1: Pexels
         if not self.mock_mode and await self.pexels.is_available():
             try:

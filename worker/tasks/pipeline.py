@@ -202,7 +202,10 @@ async def run_pipeline_direct(job_id_str: str) -> None:
 
         # Step 5: Footage Search & Selection with Deduplication (75%)
         t0 = time.time()
-        footage_mgr = FootageManager(mock_mode=settings.mock_mode)
+        footage_mgr = FootageManager(
+            mock_mode=settings.mock_mode,
+            footage_provider=settings.footage_provider,
+        )
         avoid = req.get("avoid", [])
         orientation = "portrait" if "9:16" in req.get("aspect_ratios", []) and len(req.get("aspect_ratios", [])) == 1 else "landscape"
 
