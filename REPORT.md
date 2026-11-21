@@ -98,6 +98,6 @@ Measured during repository and container validation:
 
 ## 6. What We Would Do Next
 
-1. **Live provider validation:** Exercise Pexels, Pixabay, fal.ai, Gemini/OpenAI, and S3/MinIO with credentials and an accessible registry.
-2. **Indic speech quality measurement:** Add genuine Indic speech fixtures and measure transcription WER rather than only validating language hints and pipeline execution.
-3. **YOLO-Based Smart Re-Framing:** Incorporate a lightweight object detector to dynamically track salient subjects for 9:16 exports.
+1. **Live provider validation:** Requires valid external credentials and outbound provider/network access; cannot be completed from an offline/credentialless environment.
+2. **Indic speech quality measurement:** Requires genuine Indic speech recordings and reference transcripts.
+3. **Smart 9:16 re-framing:** Implemented as an optional OpenCV face/subject detector with centered fallback; a YOLO detector remains optional for general object tracking.

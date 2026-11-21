@@ -94,7 +94,7 @@ Submits every file in `input/` as a separate job, polls until all jobs finish, t
 | `OPENAI_API_KEY` | _(empty)_ | ⚠️ | OpenAI key when `LLM_PROVIDER=openai` |
 | `GEMINI_API_KEY` | _(empty)_ | ⚠️ | Gemini Flash key when `LLM_PROVIDER=gemini` |
 | `LLM_PROVIDER` | `gemini` | ✅ | Scene segmentation LLM: `gemini` or `openai` |
-| `FOOTAGE_PROVIDER` | `pexels` | ✅ | Primary footage source: `pexels` or `pixabay` |
+| `FOOTAGE_PROVIDER` | `fal` | ✅ | Primary provider: `pexels`, `pixabay`, or `fal` |
 | `WHISPER_MODEL` | `small` | — | faster-whisper model; use `large-v3-turbo` for higher Indic quality |
 | `WHISPER_COMPUTE_TYPE` | `int8` | — | CPU-friendly faster-whisper compute type |
 | `TTS_PROVIDER` | `edge` | ✅ | Text-to-speech engine: `edge` (Edge TTS) |
@@ -103,6 +103,7 @@ Submits every file in `input/` as a separate job, polls until all jobs finish, t
 | `MAX_AUDIO_DURATION` | `600` | — | Maximum accepted audio length in seconds (10 min) |
 | `WORKER_CONCURRENCY` | `2` | — | Number of parallel ARQ workers per container |
 | `HMAC_SECRET` | `change-me-in-production` | ✅ | Secret used to sign HMAC-SHA256 callback payloads |
+| `CORS_ORIGINS` | `http://localhost:8000` | ✅ | Comma-separated browser origins allowed by the API |
 
 ---
 

@@ -69,6 +69,7 @@ class Settings(BaseSettings):
 
     # ── Security ────────────────────────────────────────────────────────────
     hmac_secret: str = "change-me-in-production"
+    cors_origins: str = "http://localhost:8000"
 
     # ── App metadata ────────────────────────────────────────────────────────
     app_name: str = "IncuBrix B-roll Video Engine"

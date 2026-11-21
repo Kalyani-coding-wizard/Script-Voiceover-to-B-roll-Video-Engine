@@ -62,8 +62,12 @@ class VideoRenderer:
         if aspect_ratio == "16:9":
             scale_filter = f"scale={out_w}:{out_h}:force_original_aspect_ratio=increase,crop={out_w}:{out_h}"
         elif aspect_ratio == "9:16":
-            # Smart center-weighted crop for 9:16 vertical video
-            scale_filter = f"scale=-2:{out_h},crop={out_w}:{out_h}:(in_w-{out_w})/2:0"
+            subject_x = await self._detect_subject_x(local_src)
+            scale_filter = (
+                f"scale=-2:{out_h},"
+                f"crop={out_w}:{out_h}:max(0,min(in_w-{out_w},"
+                f"({subject_x}*in_w)-({out_w}/2))):0"
+            )
         elif aspect_ratio == "1:1":
             # 1:1 square crop
             scale_filter = f"scale=-2:{out_h},crop={out_w}:{out_h}:(in_w-{out_w})/2:0"
@@ -107,6 +111,49 @@ class VideoRenderer:
             await self._generate_synthetic_scene(output_file, target_duration, out_w, out_h, scene.text)
 
         return str(output_file)
+
+    async def _detect_subject_x(self, source: Path) -> float:
+        """Detect a frontal face/subject and return a normalized horizontal center."""
+        try:
+            import cv2
+        except ImportError:
+            return 0.5
+
+        cap = cv2.VideoCapture(str(source))
+        if not cap.isOpened():
+            return 0.5
+
+        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1920
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
+        sample_indices = {frame_count // 4, frame_count // 2, (frame_count * 3) // 4}
+        subject_centers: List[int] = []
+
+        face_cascade = cv2.CascadeClassifier(
+            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        )
+        frame_index = 0
+        while frame_index < frame_count:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            if frame_index in sample_indices:
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = face_cascade.detectMultiScale(
+                    gray,
+                    scaleFactor=1.1,
+                    minNeighbors=4,
+                    minSize=(60, 60),
+                )
+                if len(faces):
+                    x, _y, w, _h = max(faces, key=lambda face: face[2] * face[3])
+                    subject_centers.append(x + w // 2)
+                    break
+            frame_index += 1
+        cap.release()
+
+        if not subject_centers:
+            return 0.5
+        return min(1.0, max(0.0, subject_centers[0] / frame_width))
 
     async def stitch_and_multiplex(
         self,
