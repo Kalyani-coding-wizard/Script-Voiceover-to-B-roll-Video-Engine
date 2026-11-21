@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import redis.asyncio as aioredis
 
 from app.dependencies import get_db, get_redis
+from app.config import get_settings
 
 router = APIRouter(tags=["Health"])
 
@@ -28,6 +29,7 @@ async def ready(
     Returns 200 when both are reachable, 503 otherwise.
     """
     checks: dict = {}
+    settings = get_settings()
 
     # PostgreSQL
     try:
@@ -49,6 +51,11 @@ async def ready(
             checks["redis"] = f"error: {exc}"
 
     all_ok = all(v == "ok" for v in checks.values())
+    checks["storage"] = "configured" if settings.artifact_backend in {"auto", "s3"} else "local"
+    checks["fal"] = "configured" if settings.fal_api_key else "missing"
+    checks["gemini"] = "configured" if settings.gemini_api_key else "missing"
+    checks["openai"] = "configured" if settings.openai_api_key else "missing"
+    checks["mock_mode"] = "enabled" if settings.mock_mode else "disabled"
     if not all_ok:
         raise HTTPException(status_code=503, detail={"status": "degraded", "checks": checks})
 

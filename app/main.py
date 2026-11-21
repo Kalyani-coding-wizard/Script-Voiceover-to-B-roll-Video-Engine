@@ -49,6 +49,12 @@ structlog.configure(
 
 logger = structlog.get_logger("broll_engine")
 
+if settings.hmac_secret == "change-me-in-production":
+    logger.warning(
+        "default_hmac_secret",
+        message="Set HMAC_SECRET to a random secret before production deployment.",
+    )
+
 
 # ── Application Lifespan ────────────────────────────────────────────────────
 @asynccontextmanager
