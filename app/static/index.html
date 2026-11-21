@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IncuBrix B-roll Engine</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <p class="eyebrow">INCUBRIX</p>
+        <h1>Script to B-roll</h1>
+      </div>
+      <span id="health" class="health">Checking API...</span>
+    </header>
+
+    <section class="grid">
+      <form id="job-form" class="card">
+        <label for="script">Script or voiceover text</label>
+        <textarea id="script" name="script" rows="10" required placeholder="Describe the story, tutorial, or voiceover..."></textarea>
+
+        <div class="options">
+          <label>
+            Format
+            <select id="aspect" name="aspect">
+              <option value="9:16">Vertical 9:16</option>
+              <option value="16:9">Landscape 16:9</option>
+              <option value="1:1">Square 1:1</option>
+            </select>
+          </label>
+          <label>
+            Voice
+            <select id="voice" name="voice">
+              <option value="en-IN-female">English (India) - Female</option>
+              <option value="hi-IN-female">Hindi - Female</option>
+              <option value="te-IN-female">Telugu - Female</option>
+              <option value="ta-IN-female">Tamil - Female</option>
+              <option value="ml-IN-female">Malayalam - Female</option>
+            </select>
+          </label>
+        </div>
+
+        <label>
+          Visual style
+          <input id="style" value="bright, modern, real-world footage">
+        </label>
+
+        <button id="submit" type="submit">Generate video</button>
+      </form>
+
+      <aside class="card status-card">
+        <h2>Generation status</h2>
+        <div id="empty" class="empty">No job running</div>
+        <div id="job" hidden>
+          <p id="job-id" class="mono"></p>
+          <div class="progress-track"><div id="progress"></div></div>
+          <p id="state" class="state">Queued</p>
+          <div id="error" class="error" hidden></div>
+          <div id="downloads" class="downloads" hidden></div>
+        </div>
+      </aside>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

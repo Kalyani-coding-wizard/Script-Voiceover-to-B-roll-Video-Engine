@@ -15,6 +15,14 @@ async def test_health_endpoints(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_web_ui_served(client: AsyncClient):
+    response = await client.get("/")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Script to B-roll" in response.text
+
+
+@pytest.mark.asyncio
 async def test_create_job_text_script(client: AsyncClient):
     payload = {
         "script": "Building financial discipline is the cornerstone of long-term independence.",

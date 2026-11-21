@@ -7,13 +7,15 @@ import logging
 import sys
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 import structlog
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app import dependencies
 from app.config import get_settings
@@ -169,7 +171,11 @@ app.include_router(health.router)
 app.include_router(jobs.router)
 app.include_router(status_router.router)
 
+static_dir = Path(__file__).with_name("static")
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
 
 @app.get("/", include_in_schema=False)
-async def root_redirect():
-    return {"message": "IncuBrix B-roll Engine API", "docs": "/docs", "health": "/health"}
+async def root():
+    return FileResponse(str(static_dir / "index.html"))
