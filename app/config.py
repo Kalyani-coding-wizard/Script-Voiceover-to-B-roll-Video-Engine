@@ -44,8 +44,6 @@ class Settings(BaseSettings):
     artifact_backend: Literal["auto", "local", "s3"] = "auto"
 
     # ── External API keys ───────────────────────────────────────────────────
-    pexels_api_key: str = ""
-    pixabay_api_key: str = ""
     fal_api_key: str = ""
     openai_api_key: str = ""
     gemini_api_key: str = ""
@@ -53,7 +51,7 @@ class Settings(BaseSettings):
     # ── Provider selection ──────────────────────────────────────────────────
     tts_provider: Literal["edge", "openai"] = "edge"
     llm_provider: Literal["gemini", "openai"] = "gemini"
-    footage_provider: Literal["pexels", "pixabay", "fal"] = "fal"
+    footage_provider: Literal["fal"] = "fal"
 
     # ── Feature flags ───────────────────────────────────────────────────────
     mock_mode: bool = False
@@ -75,6 +73,13 @@ class Settings(BaseSettings):
     app_name: str = "IncuBrix B-roll Video Engine"
     app_version: str = "1.0.0"
     debug: bool = False
+
+    @field_validator("footage_provider", mode="before")
+    @classmethod
+    def normalise_legacy_footage_provider(cls, value: str) -> str:
+        if str(value).strip().lower() in {"pexels", "pixabay"}:
+            return "fal"
+        return str(value).strip().lower()
 
     @field_validator("log_level")
     @classmethod

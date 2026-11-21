@@ -40,5 +40,12 @@ def test_fal_is_valid_footage_provider_setting(monkeypatch):
     assert settings.footage_provider == "fal"
 
 
+@pytest.mark.parametrize("legacy", ["pexels", "pixabay"])
+def test_legacy_stock_provider_settings_normalize_to_fal(monkeypatch, legacy):
+    monkeypatch.setenv("FOOTAGE_PROVIDER", legacy)
+    settings = Settings(_env_file=None)
+    assert settings.footage_provider == "fal"
+
+
 def test_footage_manager_accepts_explicit_provider():
     assert FootageManager(mock_mode=False, footage_provider="fal").footage_provider == "fal"

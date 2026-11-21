@@ -102,8 +102,7 @@ def build_manifest_json(
     # Cost calculation:
     # TTS: ~$0.0000 (Edge TTS is free)
     # Whisper: Local compute
-    # Pexels/Pixabay have provider-specific commercial licences; records are
-    # retained per clip in timeline.json.
+    # Provider licences are retained per clip in timeline.json.
     # fal.ai: ~$0.005 per generation if triggered
     # Compute: ~$0.004 per minute on modern cloud vCPU
     estimated_cost_usd = round(0.004 * (total_duration / 60.0) + (0.005 * ai_clip_count), 4)
@@ -127,8 +126,8 @@ def build_manifest_json(
             "generative_video_fallback": "fal-ai-fast-svd",
         },
         "providers": {
-            "footage_primary": "pexels",
-            "footage_secondary": "pixabay",
+            "footage_primary": "fal",
+            "footage_secondary": "title_cards",
             "footage_generative": "fal_ai",
             "tts": settings_payload.get("voice", "en-IN-female"),
             "storage": "s3-minio-compatible",

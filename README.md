@@ -1,6 +1,6 @@
 # IncuBrix Assessment 3 — Script-to-B-roll Video Engine
 
-A containerised FastAPI service that converts a voiceover audio file, plain-text script, or structured scene list into polished B-roll videos with captions — in multiple aspect ratios (16:9, 9:16, 1:1) — in a single API call. It transcribes audio with Whisper, segments the transcript into scenes using an LLM, fetches royalty-free stock footage from Pexels/Pixabay (falling back to AI-generated video via fal.ai), and renders the final MP4 with burned-in captions using FFmpeg.
+A containerised FastAPI service that converts a voiceover audio file, plain-text script, or structured scene list into polished B-roll videos with captions — in multiple aspect ratios (16:9, 9:16, 1:1) — in a single API call. It transcribes audio with Whisper, segments the transcript using an LLM, generates footage through fal.ai, and renders the final MP4 with burned-in captions using FFmpeg.
 
 The creator-first defaults are **9:16 output**, captions enabled, and `language=auto`. Telugu, Tamil, Malayalam, Hindi, and code-mixed inputs are retained in scene text while search queries are normalized to concrete English visuals. Every timeline clip carries its provider licence, licence URL, source URL, author, and retrieval timestamp. Movie, anime, celebrity, gaming-IP, and unsafe requests are routed to an original FFmpeg title-card fallback rather than scraped footage.
 
@@ -15,8 +15,8 @@ flowchart LR
     Redis --> Worker["ARQ Worker"]
     Worker -->|audio| Whisper["Whisper\ntranscription"]
     Worker -->|transcript| LLM["Gemini Flash /\nOpenAI scene split"]
-    Worker -->|keywords| Pexels["Pexels / Pixabay\nstock footage"]
-    Pexels -->|no clip found| FalAI["fal.ai SVD\nAI fallback"]
+    Worker -->|visual prompts| FalAI["fal.ai\ntext-to-video"]
+    FalAI -->|no clip found| Card["Original title card"]
     Worker -->|text input| EdgeTTS["Edge TTS\nvoiceover"]
     Worker -->|clips + audio + captions| FFmpeg["FFmpeg\nrender"]
     FFmpeg -->|mp4 / srt / json| MinIO["MinIO\n(S3-compatible)"]
@@ -88,13 +88,11 @@ Submits every file in `input/` as a separate job, polls until all jobs finish, t
 | `S3_ACCESS_KEY` | `minioadmin` | ✅ | S3 access key |
 | `S3_SECRET_KEY` | `minioadmin` | ✅ | S3 secret key |
 | `S3_BUCKET` | `broll-outputs` | ✅ | Bucket name for rendered video outputs |
-| `PEXELS_API_KEY` | _(empty)_ | ⚠️ | Pexels API key — required unless `MOCK_MODE=true` |
-| `PIXABAY_API_KEY` | _(empty)_ | ⚠️ | Pixabay API key — optional second footage source |
 | `FAL_API_KEY` | _(empty)_ | ⚠️ | fal.ai key for AI-generated video fallback |
 | `OPENAI_API_KEY` | _(empty)_ | ⚠️ | OpenAI key when `LLM_PROVIDER=openai` |
 | `GEMINI_API_KEY` | _(empty)_ | ⚠️ | Gemini Flash key when `LLM_PROVIDER=gemini` |
 | `LLM_PROVIDER` | `gemini` | ✅ | Scene segmentation LLM: `gemini` or `openai` |
-| `FOOTAGE_PROVIDER` | `fal` | ✅ | Primary provider: `pexels`, `pixabay`, or `fal` |
+| `FOOTAGE_PROVIDER` | `fal` | ✅ | Active footage provider: `fal` |
 | `WHISPER_MODEL` | `small` | — | faster-whisper model; use `large-v3-turbo` for higher Indic quality |
 | `WHISPER_COMPUTE_TYPE` | `int8` | — | CPU-friendly faster-whisper compute type |
 | `TTS_PROVIDER` | `edge` | ✅ | Text-to-speech engine: `edge` (Edge TTS) |
@@ -195,7 +193,7 @@ Re-renders only the affected scene clip in clearly less time than a full render.
 | `TRANSCRIPTION_FAILED` | 500 | ✅ | Whisper could not transcribe the audio |
 | `FOOTAGE_UNAVAILABLE` | 500 | ✅ | No stock clips found and fal.ai fallback failed |
 | `RENDER_FAILED` | 500 | ✅ | FFmpeg exited with non-zero status |
-| `UPSTREAM_RATE_LIMIT` | 429 | ✅ | Pexels/Pixabay/LLM rate limit hit; job will retry |
+| `UPSTREAM_RATE_LIMIT` | 429 | ✅ | fal.ai/Gemini/OpenAI rate limit hit; job reports or retries |
 | `STORAGE_ERROR` | 500 | ✅ | MinIO upload failed |
 | `IDEMPOTENCY_CONFLICT` | 409 | ❌ | Same `Idempotency-Key` used with different payload |
 
@@ -221,7 +219,7 @@ The engine explicitly handles the following edge cases from the IncuBrix brief:
 |---|---|---|
 | 1 | **Very short scene (< 2 s)** | Scene is padded with a freeze-frame of the last clip frame; captions still display correctly |
 | 2 | **Very long scene (> 30 s)** | Scene is split into sub-segments of ≤ 15 s, each getting its own B-roll clip, to avoid a single looping clip |
-| 3 | **No matching stock footage** | Falls back to fal.ai Stable Video Diffusion generation using the scene's keyword prompt; if that also fails the placeholder "no footage" card is used |
+| 3 | **No fal.ai footage** | Uses an original title card; no Pexels or Pixabay dependency |
 | 4 | **Non-English audio** | Whisper auto-detects language; LLM keyword extraction prompt is language-aware; footage search uses English-translated keywords |
 | 5 | **Audio with music / noise** | Whisper `--condition_on_previous_text False` and VAD filter reduce hallucination on noisy audio |
 | 6 | **Script with no natural scene breaks** | LLM is prompted to split on semantic topic shifts, not punctuation alone; minimum scene duration enforced |
@@ -238,7 +236,5 @@ The first request after `docker compose up` may take longer while faster-whisper
 ### Rate Limits
 | Service | Free Tier Limit | Engine Behaviour |
 |---|---|---|
-| Pexels API | 200 req/hour | Automatic retry with exponential back-off; falls back to Pixabay |
-| Pixabay API | 100 req/min | Same retry/fallback strategy |
 | Gemini Flash | 60 req/min (free) | Retry with jitter; switch to `LLM_PROVIDER=openai` for higher limits |
 | fal.ai | Per-API-key quota | Failure logs `FOOTAGE_UNAVAILABLE`; placeholder card inserted |

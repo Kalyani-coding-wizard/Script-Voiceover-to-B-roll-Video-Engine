@@ -2,10 +2,9 @@
 
 All models, libraries, APIs, and media sources utilized in the default execution path are licensed for commercial use.
 
-Licence links verified 2026-11-18: Pexels License
-(`https://www.pexels.com/license/`) and Pixabay Content License
-(`https://pixabay.com/service/license-summary/`). These are provider licences,
-not CC0; each clip stores the applicable licence name and URL.
+The active footage path uses fal.ai and original title cards. Generated clips
+retain their provider attribution and licence metadata; title cards are
+original IncuBrix/FFmpeg output.
 
 ---
 
@@ -20,12 +19,11 @@ not CC0; each clip stores the applicable licence name and URL.
 
 ---
 
-## 2. Media & Stock Footage Sources
+## 2. Media & Footage Sources
 
 | Source | API / Platform | License | Commercial Usability | Purpose |
 |---|---|---|---|---|
-| **Pexels Video API** | Pexels GmbH | Pexels License (Commercial Use Allowed, No Attribution Required) | Permitted | Primary HD stock B-roll footage |
-| **Pixabay Video API** | Pixabay GmbH / Canva | Pixabay Content License (Commercial Safe) | Permitted | Secondary stock B-roll footage failover |
+| **fal.ai text-to-video** | fal.ai | Commercial API License | Permitted | Primary generated B-roll footage |
 | **Mock/title-card fallback** | IncuBrix renderer | Original output / FFmpeg legal terms | Permitted | Last-resort visuals with no external media dependency |
 
 ---

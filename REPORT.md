@@ -14,7 +14,7 @@ Modern video creators spend hours manually searching stock libraries for relevan
 This project delivers an automated, containerized B-roll Video Engine that:
 1. Ingests raw voiceover audio (`.mp3`, `.wav`, `.m4a`) or plain text / IncuBrix scene lists.
 2. Performs word-level transcription and semantic scene segmentation that aligns strictly to voice boundaries.
-3. Employs a dual-source selection rule balancing commercial stock libraries (Pexels, Pixabay) and generative video synthesis (fal.ai Fast SVD), ensuring license cleanliness and zero clip repeats.
+3. Uses fal.ai generative video synthesis with original title-card fallback and zero clip repeats.
 4. Renders 1080p-class videos in multiple aspect ratios (`16:9`, `9:16`, `1:1`) with consistent colour grading, zero black frames, and burn-in captions.
 5. Adheres to all 10 points of the IncuBrix Integration Standard.
 
@@ -44,7 +44,7 @@ This project delivers an automated, containerized B-roll Video Engine that:
 We implemented a dual-provider architecture with an explicit, measurable decision rule:
 $$\text{Choice} = \begin{cases}
 \text{Generative AI (fal.ai Fast SVD)}, & \text{if } S_{\text{relevance}} < 0.65 \text{ or Scene is Abstract/Metaphorical} \\
-\text{Stock Library (Pexels / Pixabay)}, & \text{otherwise}
+\text{fal.ai generated footage}, & \text{otherwise}
 \end{cases}$$
 - **Disambiguation Engine:** Homonyms ("cloud", "mouse", "python", "bank", "value") are mapped to domain-accurate visual prompts before query dispatch.
 - **Deduplication Matrix:** Tracks a global `used_clip_ids` set per job, mathematically preventing duplicate clips in any output video.

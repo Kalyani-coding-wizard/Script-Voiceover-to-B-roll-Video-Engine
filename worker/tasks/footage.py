@@ -1,7 +1,6 @@
 """
 Footage Search and Selection Orchestrator.
 Coordinates:
-- Stock libraries (Pexels, Pixabay)
 - Generative AI video models (fal.ai Fast SVD)
 - Licence-clean mock provider for tests / offline
 - Measurable selection rule between stock vs generative AI
@@ -18,8 +17,6 @@ import structlog
 from footage_providers.base import FootageClip, FootageProvider
 from footage_providers.fal_ai import FalAIFootageProvider
 from footage_providers.mock import MockFootageProvider
-from footage_providers.pexels import PexelsProvider
-from footage_providers.pixabay import PixabayProvider
 from worker.tasks.segment import SegmentedScene
 from worker.tasks.cards import make_title_card_clip
 from worker.tasks.safety import gate_query
@@ -46,7 +43,7 @@ SENSITIVE_KEYWORDS = {
 class FootageManager:
     """Manages multi-provider footage retrieval, fallback hierarchy, and deduplication."""
 
-    def __init__(self, mock_mode: bool = False, footage_provider: str = "pexels"):
+    def __init__(self, mock_mode: bool = False, footage_provider: str = "fal"):
         self.mock_mode = mock_mode
         self.footage_provider = footage_provider
         self.used_clip_ids: Set[str] = set()
@@ -54,8 +51,6 @@ class FootageManager:
 
         # Initialize providers
         self.mock_provider = MockFootageProvider()
-        self.pexels = PexelsProvider()
-        self.pixabay = PixabayProvider()
         self.fal_ai = FalAIFootageProvider()
 
     def _is_abstract_concept(self, text: str, query: str) -> bool:
@@ -79,7 +74,7 @@ class FootageManager:
         Picks the best licence-clean clip for a scene using the written measurable rule:
         1. Check sensitive topics -> use calm, respectful nature/ambient visuals.
         2. Check abstract topics or low stock relevance -> use generative AI (fal.ai).
-        3. Real-world topics -> use Pexels / Pixabay stock libraries.
+        3. Real-world topics -> use fal.ai generative footage.
         4. Resilient fallback -> if one provider is down, seamless switch to next.
         """
         avoid = avoid or []
@@ -192,77 +187,6 @@ class FootageManager:
                         return best
                 except Exception as exc:
                     logger.warning("fal_ai_search_failed_fallback_to_stock", error=str(exc))
-
-        if not self.mock_mode and self.footage_provider == "pixabay":
-            if await self.pixabay.is_available():
-                try:
-                    clips = await self.pixabay.search(
-                        query=query,
-                        scene_text=scene_text,
-                        orientation=orientation,
-                        avoid=avoid,
-                        used_ids=self.used_clip_ids,
-                        per_page=5,
-                    )
-                    if clips:
-                        best = clips[0]
-                        self.used_clip_ids.add(best.clip_id)
-                        best.reason = override_reason or (
-                            f"Selected Stock (Pixabay) per configured default: '{query}'."
-                        )
-                        return best
-                except Exception as exc:
-                    logger.warning("pixabay_search_failed_fallback_to_pexels", error=str(exc))
-
-        # Provider 1: Pexels
-        if not self.mock_mode and await self.pexels.is_available():
-            try:
-                clips = await self.pexels.search(
-                    query=query,
-                    scene_text=scene_text,
-                    orientation=orientation,
-                    avoid=avoid,
-                    used_ids=self.used_clip_ids,
-                    per_page=5,
-                )
-                if clips:
-                    best = clips[0]
-                    self.used_clip_ids.add(best.clip_id)
-                    if override_reason:
-                        best.reason = override_reason
-                    else:
-                        best.reason = (
-                            f"Selected Stock (Pexels) per Measurable Rule: concrete real-world topic "
-                            f"'{query}' (relevance: {best.relevance_score:.2f})."
-                        )
-                    return best
-            except Exception as exc:
-                logger.warning("pexels_search_failed_fallback_to_pixabay", error=str(exc))
-
-        # Provider 2: Pixabay
-        if not self.mock_mode and await self.pixabay.is_available():
-            try:
-                clips = await self.pixabay.search(
-                    query=query,
-                    scene_text=scene_text,
-                    orientation=orientation,
-                    avoid=avoid,
-                    used_ids=self.used_clip_ids,
-                    per_page=5,
-                )
-                if clips:
-                    best = clips[0]
-                    self.used_clip_ids.add(best.clip_id)
-                    if override_reason:
-                        best.reason = override_reason
-                    else:
-                        best.reason = (
-                            f"Selected Stock (Pixabay) via provider failover: matched '{query}' "
-                            f"(relevance: {best.relevance_score:.2f})."
-                        )
-                    return best
-            except Exception as exc:
-                logger.warning("pixabay_search_failed_fallback_to_mock", error=str(exc))
 
         if not self.mock_mode:
             fallback = make_title_card_clip(
